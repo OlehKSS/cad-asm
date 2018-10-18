@@ -1,0 +1,10 @@
+.DS_Store
+**/.DS_Store
+
+.vscode
+
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/**
+**/__pycache__/**
+
+ashapes.egg-info

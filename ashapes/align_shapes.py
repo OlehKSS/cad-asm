@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+# Path to hand data
 path = "./data/hand/shapes/shapes.txt"
 
 shapes = np.loadtxt(path, np.float32) * 600
@@ -22,7 +23,7 @@ shapes_norm = np.zeros(shapes.shape)
 shapes_norm[:no_points, :] = (shapes[:no_points, :] - x_mean) / norm
 shapes_norm[no_points:, :] = (shapes[no_points:, :] - y_mean) / norm
 
-# Plotting shapes (aligned)
+# Plotting shapes (COM)
 plt.figure()
 plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
 
@@ -64,7 +65,7 @@ while done is False:
     # Checking time
     mean_diff = new_mean_shape - x2
     norm = np.linalg.norm(mean_diff)
-    print("It. No.: {}, Norm: {}".format(iteration_no, norm))
+    print("Iter. No.: {}, Norm: {}".format(iteration_no, norm))
     done = True if norm < 0.001 else False
 
     # Reassignment for next iteration
@@ -72,6 +73,9 @@ while done is False:
     x2 = new_mean_shape
     iteration_no += 1
 
+# Plotting shapes (aligned)
 plt.figure()
 plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
 plt.show()
+
+np.savetxt("./data/hand/shapes/shapes_norm.txt", shapes_norm)

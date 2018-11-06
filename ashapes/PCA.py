@@ -14,7 +14,6 @@ def pca(shapes_norm):
 
     # total variance of the data
     v_t = np.sum(real_evals)
-    print(v_t)
 
     # the proportion of the total variation one wishes to explain
     f_v = 0.98

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 def pca(shapes_norm):
     # Mean and covariance
     mean_shape = np.mean(shapes_norm, axis=1)
+    mean_shape = np.reshape(mean_shape,(len(mean_shape),1))
     cov_shape = np.cov(shapes_norm)
 
     # E-values E-vectors
@@ -14,7 +15,7 @@ def pca(shapes_norm):
 
     # total variance of the data
     v_t = np.sum(real_evals)
-    print(v_t)
+    #print(v_t)
 
     # the proportion of the total variation one wishes to explain
     f_v = 0.98

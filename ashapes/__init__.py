@@ -2,5 +2,5 @@
 
 #import align_shapes
 #import PCA
-#import matching
-import visualizer
+import matching
+#import visualizer

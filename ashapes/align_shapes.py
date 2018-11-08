@@ -72,6 +72,7 @@ while done is False:
     shapes_norm = shapes_new
     x2 = new_mean_shape
     iteration_no += 1
+    break
 
 # Plotting shapes (aligned)
 plt.figure()

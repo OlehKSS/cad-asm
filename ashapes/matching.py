@@ -7,7 +7,7 @@ import matplotlib.animation as animation
 from matplotlib import style
 
 from PCA import pca
-
+from visualizer import display_normals, update_line, draggable_hand
 # Path to aligned data
 path = "./data/hand/shapes/shapes_norm.txt"
 path_image = "./data/hand/images/0000.jpg"
@@ -17,28 +17,8 @@ img = cv2.imread(path_image,0)
 
 no_points = 56
 no_shapes = 40
-scale = 20
+scale = 30
 dimens = 2
-
-def display_normals(normals, mean, img, scale=15):
-    """
-    Helper function for displaying normals.
-
-    Input:
-        normals (numpy.ndarray): array of normals for each mean.
-        mean (numpy.ndarray): array of mean coordinates of landmarks.
-        img (numpy.ndarray): object image.
-        scale (int): determines how long should normal be on the plot
-    """
-    x1 = mean[:no_points, 0] + scale * normals[:, 0]
-    x2 = mean[:no_points, 0] - scale * normals[:, 0]
-    y1 = mean[no_points:, 0] + scale * normals[:, 1]
-    y2 = mean[no_points:, 0] - scale * normals[:, 1]
-
-    plt.imshow(img, cmap = "gray")
-    plt.plot(mean[:no_points,0], mean[no_points:,0], 'o', color='#F82A80')
-    plt.plot((x1, x2), (y1, y2))
-    plt.show()
 
 def transform_shape(corr_pos, R, t=(0, 0)):
     """
@@ -68,12 +48,6 @@ def move_to_origin(x):
     x[no_points:, :] = (x[no_points:, :] - ty)
     return x, tx, ty
 
-def update_line(hl, new_data):
-    hl.set_xdata(new_data[:no_points])
-    hl.set_ydata(new_data[no_points:])
-    plt.pause(0.05)
-    plt.draw()
-
 #Image gradient, we can try 
 sobelx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=5)
 sobely = cv2.Sobel(img,cv2.CV_32F, 0, 1, ksize=5)
@@ -85,16 +59,27 @@ grad_mag = (grad_mag - grad_mag.min()) / grad_mag.max()
 # plt.show()
 
 # Generate the model point positions using x = x_bar + P * b
+trans_init = (300, 300)
 x_mean, largest_evals, P = pca(shapes_norm)
-x_mean_scaled = transform_shape(x_mean, 30000 * np.eye(2), t=(320, 350))
+x_mean_scaled = transform_shape(x_mean, 1400 * np.eye(2), trans_init)
 # Initialise the shape parameters, b, to zero (the mean shape)
 b = np.zeros((len(largest_evals), 1))
 P = np.transpose(P)
 
+dr = draggable_hand(img, x_mean_scaled)
+trans_init = (trans_init[0] + dr.trans_x, trans_init[1] + dr.trans_y)
+print("Final translation")
+print(trans_init)
+
+# getting new transformed shape
+x_mean_scaled = np.zeros_like(x_mean_scaled)
+x_mean_scaled[:no_points] = dr.shape_x
+x_mean_scaled[no_points:] = dr.shape_y
+
 plt.imshow(img, cmap="gray")
 hl, = plt.plot([], [])
 
-for i in range (0,70):
+for i in range (0,150):
     # should be done with protocol 1 pg 9
     # Norm Calculation
     normals = np.zeros((no_points, dimens))

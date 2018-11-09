@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 
 # Path to hand data
 path = "./data/hand/shapes/shapes.txt"
+# min difference, after which we stop iterations
+min_diff = 0.025
 
 shapes = np.loadtxt(path, np.float32) * 600
 
@@ -66,7 +68,7 @@ while done is False:
     mean_diff = new_mean_shape - x2
     norm = np.linalg.norm(mean_diff)
     print("Iter. No.: {}, Norm: {}".format(iteration_no, norm))
-    done = True if norm < 0.001 else False
+    done = True if norm < min_diff else False
 
     # Reassignment for next iteration
     shapes_norm = shapes_new

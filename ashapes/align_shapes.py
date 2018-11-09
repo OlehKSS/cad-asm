@@ -3,15 +3,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from utils import no_points, no_shapes
+
 # Path to hand data
 path = "./data/hand/shapes/shapes.txt"
 # min difference, after which we stop iterations
 min_diff = 0.025
 
 shapes = np.loadtxt(path, np.float32) * 600
-
-no_points = 56
-no_shapes = 40
 
 # Plotting shapes (unaligned)
 plt.figure()

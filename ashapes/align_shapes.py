@@ -1,83 +1,103 @@
-"""Active Shapes Method in Python"""
+import os
 
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils import no_points, no_shapes
+from utils import no_points, no_shapes, get_images
 
-# Path to hand data
-path = "./data/hand/shapes/shapes.txt"
-# min difference, after which we stop iterations
-min_diff = 0.025
 
-shapes = np.loadtxt(path, np.float32) * 600
+def align(path_shapes, path_images, path_shapes_norm, test_img_name=48):
+    """
+    Align all the shapes and normalize their coordinates excluding test image.
+    :param path_shapes: a path to the file with shapes coordinates.
+    :param path_images: a path to the folder that stores original images.
+    :param path_shapes_norm: a full path to a file where normalized shapes coordinates should be stored.
+    :param test_img_name: a number that is a name of the test image.
+    :return: None
+    """
+    # min difference, after which we stop iterations
+    min_diff = 0.025
 
-# Plotting shapes (unaligned)
-plt.figure()
-plt.plot(shapes[:no_points, :], shapes[no_points:, :])
+    shapes = np.loadtxt(path_shapes, np.float32) * 600
 
-# Normalize shapes to have origin at COM
-x_mean = np.mean(shapes[:no_points, :], axis=0).reshape([1, 40])
-norm = np.linalg.norm(shapes, axis=0).reshape([1, 40])
-y_mean = np.mean(shapes[no_points:, :], axis=0).reshape([1, 40])
-shapes_norm = np.zeros(shapes.shape)
-shapes_norm[:no_points, :] = (shapes[:no_points, :] - x_mean) / norm
-shapes_norm[no_points:, :] = (shapes[no_points:, :] - y_mean) / norm
+    imgs = get_images(path_images)
+    imgs = sorted([int(name) for name in imgs])
 
-# Plotting shapes (COM)
-plt.figure()
-plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
+    # set test image and remove from shapes array
+    test_img_indx = imgs.index(test_img_name)
+    test_img_shape = shapes[:, test_img_indx]
+    test_img_path = os.path.join(path_images, str(test_img_name).zfill(4) + ".jpg")
+    test_img = cv2.imread(test_img_path, 0)
 
-# Find mean shape for starting point iterations
-mean_shape = np.mean(shapes_norm, axis=1).reshape([112])
+    shapes = np.delete(shapes, test_img_indx, 1)
 
-x2 = mean_shape/(np.linalg.norm(mean_shape))
-# x2 = (shapes_norm[:, 0]/np.linalg.norm(mean_shape)).reshape([112])
+    # Plotting shapes (unaligned)
+    plt.figure()
+    plt.plot(shapes[:no_points, :], shapes[no_points:, :])
 
-done = False
-iteration_no = 0
-# Iterative part
-while done is False:
-    # x1 current, x2 mean
-    shapes_new = np.zeros(shapes_norm.shape)
-    for i in range(0, no_shapes):
-        x1 = shapes_norm[:, i]
+    # Normalize shapes to have origin at COM
+    x_mean = np.mean(shapes[:no_points, :], axis=0).reshape([1, no_shapes])
+    norm = np.linalg.norm(shapes, axis=0).reshape([1, no_shapes])
+    y_mean = np.mean(shapes[no_points:, :], axis=0).reshape([1, no_shapes])
+    shapes_norm = np.zeros(shapes.shape)
+    shapes_norm[:no_points, :] = (shapes[:no_points, :] - x_mean) / norm
+    shapes_norm[no_points:, :] = (shapes[no_points:, :] - y_mean) / norm
 
-        a = (np.dot(x1, x2)) / ((np.linalg.norm(x1)) ** 2)
-        b = (x1[:no_points] * x2[no_points:]) - (x1[no_points:] * x2[:no_points])
-        b = np.sum(b) / ((np.linalg.norm(x1)) ** 2)
+    # Plotting shapes (COM)
+    plt.figure()
+    plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
 
-        s = np.sqrt(a ** 2 + b ** 2)
-        theta = np.arctan(b / a)
+    # Find mean shape for starting point iterations
+    mean_shape = np.mean(shapes_norm, axis=1).reshape([2 * no_points])
 
-        T = np.zeros((2, 2))
-        T[0, 0] = s * np.cos(theta)
-        T[1, 1] = T[0, 0]
-        T[0, 1] = -s * np.sin(theta)
-        T[1, 0] = s * np.sin(theta)
+    x2 = mean_shape / (np.linalg.norm(mean_shape))
+    # x2 = (shapes_norm[:, 0]/np.linalg.norm(mean_shape)).reshape([2 * no_points])
 
-        for j in range(0, no_points):
-            shapes_new[j, i], shapes_new[j + no_points, i] = T @ np.array([x1[j], x1[j + no_points]])
+    done = False
+    iteration_no = 0
+    # Iterative part
+    while done is False:
+        # x1 current, x2 mean
+        shapes_new = np.zeros(shapes_norm.shape)
+        for i in range(0, no_shapes):
+            x1 = shapes_norm[:, i]
 
-    new_mean_shape = shapes_norm[:, 0]
-    new_mean_shape = np.mean(shapes_new, axis=1).reshape([112])
-    #new_mean_shape = new_mean_shape / (np.linalg.norm(new_mean_shape))
+            a = (np.dot(x1, x2)) / ((np.linalg.norm(x1)) ** 2)
+            b = (x1[:no_points] * x2[no_points:]) - (x1[no_points:] * x2[:no_points])
+            b = np.sum(b) / ((np.linalg.norm(x1)) ** 2)
 
-    # Checking time
-    mean_diff = new_mean_shape - x2
-    norm = np.linalg.norm(mean_diff)
-    print("Iter. No.: {}, Norm: {}".format(iteration_no, norm))
-    done = True if norm < min_diff else False
+            s = np.sqrt(a ** 2 + b ** 2)
+            theta = np.arctan(b / a)
 
-    # Reassignment for next iteration
-    shapes_norm = shapes_new
-    x2 = new_mean_shape
-    iteration_no += 1
-    break
+            T = np.zeros((2, 2))
+            T[0, 0] = s * np.cos(theta)
+            T[1, 1] = T[0, 0]
+            T[0, 1] = -s * np.sin(theta)
+            T[1, 0] = s * np.sin(theta)
 
-# Plotting shapes (aligned)
-plt.figure()
-plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
-plt.show()
+            for j in range(0, no_points):
+                shapes_new[j, i], shapes_new[j + no_points, i] = T @ np.array([x1[j], x1[j + no_points]])
 
-np.savetxt("./data/hand/shapes/shapes_norm.txt", shapes_norm)
+        new_mean_shape = shapes_norm[:, 0]
+        new_mean_shape = np.mean(shapes_new, axis=1).reshape([2 * no_points])
+        # new_mean_shape = new_mean_shape / (np.linalg.norm(new_mean_shape))
+
+        # Checking time
+        mean_diff = new_mean_shape - x2
+        norm = np.linalg.norm(mean_diff)
+        print("Iter. No.: {}, Norm: {}".format(iteration_no, norm))
+        done = True if norm < min_diff else False
+
+        # Reassignment for next iteration
+        shapes_norm = shapes_new
+        x2 = new_mean_shape
+        iteration_no += 1
+        break
+
+    # Plotting shapes (aligned)
+    plt.figure()
+    plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
+    plt.show()
+
+    np.savetxt(path_shapes_norm, shapes_norm)

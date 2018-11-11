@@ -85,10 +85,8 @@ class DraggableShape:
         # than we'll do transformation
         if ((self.x0 <= event.xdata <= self.x0 + self.width) and
             (self.y0 <= event.ydata <= self.y0 + self.height)):
-            print('event contains')
             self.press = self.x0, self.y0, event.xdata, event.ydata
         else:
-            print("Rotation expected.")
             self.rot_press = self.x0, self.y0, event.xdata, event.ydata
 
     def on_key_press(self, event):
@@ -154,7 +152,6 @@ class DraggableShape:
     def on_scroll(self, event):
         """Scaling on scrolling."""
         # 1% percent increase/decrease
-        print(self.scale)
         if self.is_transforming:
             return
 

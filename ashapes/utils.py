@@ -1,8 +1,12 @@
+import os
+
 import numpy as np
 from math import sqrt
+from skimage.measure import profile_line
+from skimage.measure.profile import _line_profile_coordinates
 
 no_points = 56
-no_shapes = 40
+no_shapes = 39
 
 
 def transform_shape(corr_pos, R, t=(0, 0)):
@@ -158,5 +162,103 @@ def find_current_points(grad_mag, x_mean_scaled, normals_length, display_normals
         mag_argmax = np.argmax(grad_values)
         Y[i] = check_pixels[mag_argmax, 0]
         Y[i + no_points] = check_pixels[mag_argmax, 1]
+
+    return Y
+
+
+def get_images(path="./dataset", file_extentions=[".jpg"]):
+    '''
+    Function for finding all images in the specified folder.
+    Args:
+        path (str): path to the folder
+        file_extentions ([str]): list of file extentions to include
+    Returns:
+        dict(str, str): dictionary of file names and corresponding paths
+    '''
+
+    # dictionary instantiation
+    file_names = []
+
+    # we should have different processing for different projects in data set
+
+    for dir_name, subdir_list, file_list in os.walk(path):
+        for file_name in file_list:
+            for file_ext in file_extentions:
+                if file_ext in file_name.lower():
+                    # save filename without extenstion (four last characters)
+                    file_names.append(file_name[:-4])
+
+    return file_names
+
+def find_current_points_r(grad_mag, x_mean_scaled, normals_length, display_normals=False, img=None):
+    """
+    Calculate normals and then coordinates of current found points Y. More robust to noise.
+    :param grad_mag: gradient magnitude image
+    :param x_mean_scaled: mean hand image in image coordinate system
+    :param normals_length: half-length of normal to look for max magnitude
+    :param display_normals: boolean to display image with normals
+    :param img: required to display normals, otherwise gradient image is used
+    :return: Y: coordinates of current found points Y
+    """
+    if img is None:
+        img = grad_mag
+
+    # Norm Calculation
+    normals = np.zeros((no_points, 2))
+    for i in range(0, no_points):
+        # the first and the last points vectors should
+        # be calculated using one neighbor
+        if i == 0:
+            ux = x_mean_scaled[i + 1] - x_mean_scaled[i]
+            uy = x_mean_scaled[i + 1 + no_points] - x_mean_scaled[i + no_points]
+        elif i == no_points - 1:
+            ux = x_mean_scaled[i] - x_mean_scaled[i - 1]
+            uy = x_mean_scaled[i + no_points] - x_mean_scaled[i + no_points - 1]
+        else:
+            # points that have two neighbors
+            ux = x_mean_scaled[i + 1] - x_mean_scaled[i - 1]
+            uy = x_mean_scaled[i + 1 + no_points] - x_mean_scaled[i - 1 + no_points]
+        # nx, ny for each point
+        normals[i, 0] = -uy / sqrt(ux * ux + uy * uy)
+        normals[i, 1] = ux / sqrt(ux * ux + uy * uy)
+
+    # PLOT normals
+    if display_normals:
+        display_normals(normals, x_mean_scaled, img, normals_length)
+
+    # finding correct positions on the model, Y
+    Y = np.zeros(x_mean_scaled.shape)
+
+    for i in range(0, no_points):
+        # landmark point coordinates
+        px = float(x_mean_scaled[i])
+        py = float(x_mean_scaled[i + no_points])
+        nx, ny = normals[i, :]
+        max_y, max_x = grad_mag.shape
+        check_pixels = []
+
+        for t in (-normals_length, normals_length):
+            lx = int(px + t * nx)
+            ly = int(py + t * ny)
+
+            # check boundaries
+            if lx >= max_x:
+                lx = max_x - 1
+            elif lx < 0:
+                lx = 0
+
+            if ly >= max_y:
+                ly = max_y - 1
+            elif ly < 0:
+                ly = 0
+
+            check_pixels.append((ly, lx))
+
+        pf_line = profile_line(grad_mag, check_pixels[1], check_pixels[0], linewidth=3)
+        pf_line_coors = _line_profile_coordinates(check_pixels[1], check_pixels[0], linewidth=1)
+
+        mag_argmax = np.argmax(pf_line)
+        Y[i] = int(pf_line_coors[1, mag_argmax, :])
+        Y[i + no_points] = int(pf_line_coors[0, mag_argmax, :])
 
     return Y

@@ -3,177 +3,255 @@ from numpy.linalg import inv
 import cv2
 import matplotlib.pyplot as plt
 from math import sqrt
-import matplotlib.animation as animation
-from matplotlib import style
 
-from PCA import pca
 from visualizer import display_normals, update_line, draggable_hand
-# Path to aligned data
-path = "./data/hand/shapes/shapes_norm.txt"
-path_image = "./data/hand/images/0000.jpg"
+from utils import transform_shape, move_to_origin, similarity_trans, affine_trans, no_points, no_shapes, \
+    find_current_points, find_current_points_r
 
-shapes_norm = np.loadtxt(path, np.float32)
-img = cv2.imread(path_image,0)
+def match_average_shape(path_shapes_norm, path_test_img):
+    # previously normalized shapes
+    shapes_norm = np.loadtxt(path_shapes_norm, np.float32)
+    img = cv2.imread(path_test_img, 0)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
 
-no_points = 56
-no_shapes = 40
-scale = 30
-dimens = 2
+    normals_length = 20
 
-def transform_shape(corr_pos, R, t=(0, 0)):
+    # Image gradient, we can try
+    sobelx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=5)
+    sobely = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=5)
+    grad_mag = np.sqrt(sobelx ** 2 + sobely ** 2)
+    # normalize
+    grad_mag = (grad_mag - grad_mag.min()) / grad_mag.max()
+
+    # approximate transformation of the mean shape into image coordinate system
+    trans_init = (350, 350)
+    x_mean, largest_evals, P = pca(shapes_norm)
+    x_mean_scaled = transform_shape(x_mean, 1400 * np.eye(2), trans_init)
+
+    # Ask user to improve alignment, return precisely aligned shape
+    dr = draggable_hand(grad_mag, x_mean_scaled)
+
+    x_mean_scaled = np.zeros_like(x_mean_scaled)
+    x_mean_scaled[:no_points] = dr.shape_x
+    x_mean_scaled[no_points:] = dr.shape_y
+
+    # Initialise b
+    b = np.zeros((len(largest_evals), 1))
+    # Change P indices for matrix multiplication
+    #P = np.transpose(P)
+
+    plt.subplot(121)
+    plt.imshow(grad_mag, cmap="gray")
+    hl, = plt.plot([], [], 'o-')
+    plt.title("Current shape")
+
+    plt.subplot(122)
+    plt.imshow(grad_mag, cmap="gray")
+    nl, = plt.plot([], [], 'o-')
+    plt.title("Landmark points")
+
+    it = 0
+    min_diff = 0.5
+    max_it = 100
+
+    while True:
+        # should be done with protocol 1 pg 9
+        Y = find_current_points_r(grad_mag, x_mean_scaled, normals_length, display_normals=False, img=None)
+
+        # Update x with new hand approximation
+        x = x_mean + P @ b
+        # find the transformation that maps points in fixed Y to moving x
+        # return x and Y centered at the origin,
+        # transformation matrix, and translation
+        x, Y, T, tx, ty = similarity_trans(x, Y)
+        # T, tx, ty = affine_trans(Y, x)
+
+        # Project Y into the model co-ordinate frame by inverting T
+        # y = transform_shape(T, Y)
+        y = transform_shape(Y, inv(T))
+
+        # Project y into the tangent plane to xbar (x_mean) by scaling
+        y_prime = y / (np.dot(y[:, 0], x_mean))
+
+        # Update model parameters to match to y_prime
+        b = np.transpose(P) @ (y_prime - x_mean)
+
+        # Apply constraints to the parameters of b to ensure plausible shapes
+        for i in range(0, len(largest_evals)):
+            if b[i] > 3 * sqrt(largest_evals[i]):
+                b[i] = 3 * sqrt(largest_evals[i])
+            elif b[i] < - 3 * sqrt(largest_evals[i]):
+                b[i] = - 3 * sqrt(largest_evals[i])
+
+        x_temp = x_mean + P @ b
+        # move new shape to the origin of the coordinate system
+        x_temp, _, _ = move_to_origin(x_temp)
+        x_mean_scaled_new = transform_shape(x_temp, T, (tx, ty))
+
+        update_line(hl, x_mean_scaled_new)
+        update_line(nl, transform_shape(Y, np.eye(2), (tx, ty)))
+
+        average_diff = np.linalg.norm(x_mean_scaled_new - x_mean_scaled) / sqrt(2 * no_points)
+
+        print("Iteration {},\nAverage diff {}".format(it, average_diff))
+
+        if average_diff < min_diff or it >= max_it:
+            break
+
+        it += 1
+        x_mean_scaled = x_mean_scaled_new
+    plt.show()
+
+
+def match_average_shape_pyr(path_shapes_norm, path_test_img):
+    # previously normalized shapes
+    shapes_norm = np.loadtxt(path_shapes_norm, np.float32)
+    img = cv2.imread(path_test_img, 0)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+
+    normals_length = 25
+
+    # Image gradient, we can try
+    sobelx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=5)
+    sobely = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=5)
+    grad_mag = np.sqrt(sobelx ** 2 + sobely ** 2)
+    # normalize
+    grad_mag = (grad_mag - grad_mag.min()) / grad_mag.max()
+
+    # approximate transformation of the mean shape into image coordinate system
+    trans_init = (350, 350)
+    x_mean, largest_evals, P = pca(shapes_norm)
+    x_mean_scaled = transform_shape(x_mean, 1400 * np.eye(2), trans_init)
+
+    # Ask user to improve alignment, return precisely aligned shape
+    dr = draggable_hand(grad_mag, x_mean_scaled)
+
+    x_mean_scaled = np.zeros_like(x_mean_scaled)
+    x_mean_scaled[:no_points] = dr.shape_x
+    x_mean_scaled[no_points:] = dr.shape_y
+
+    # Initialise b
+    b = np.zeros((len(largest_evals), 1))
+    # Change P indices for matrix multiplication
+    # P = np.transpose(P)
+
+    # minimum number of levels is 1
+    no_levels = 3
+    x_mean_scaled = x_mean_scaled / (2 ** (no_levels - 1))
+    pyr_normals_length = int(normals_length / 2 ** (no_levels - 1))
+    gaussian_pyr = [img]
+    pyr_temp = img
+    # create a pyramid
+    for i in range(no_levels - 1):
+        pyr_temp = cv2.pyrDown(pyr_temp)
+        gaussian_pyr.append(pyr_temp)
+
+    for pyr_index, pyr_temp in enumerate(reversed(gaussian_pyr)):
+        # find gradient for a level
+        sobelx = cv2.Sobel(pyr_temp, cv2.CV_32F, 1, 0, ksize=5)
+        sobely = cv2.Sobel(pyr_temp, cv2.CV_32F, 0, 1, ksize=5)
+        grad_mag = np.sqrt(sobelx ** 2 + sobely ** 2)
+        # normalize
+        grad_mag = (grad_mag - grad_mag.min()) / grad_mag.max()
+
+        plt.subplot(121)
+        plt.imshow(grad_mag, cmap="gray")
+        hl, = plt.plot([], [], 'o-')
+        plt.title("Current shape")
+
+        plt.subplot(122)
+        plt.imshow(grad_mag, cmap="gray")
+        nl, = plt.plot([], [], 'o-')
+        plt.title("Landmark points")
+
+        it = 0
+        min_diff = 0.5
+        max_it = 100
+
+        while True:
+            # should be done with protocol 1 pg 9
+            Y = find_current_points_r(grad_mag, x_mean_scaled, pyr_normals_length, display_normals=False, img=None)
+
+            # Update x with new hand approximation
+            x = x_mean + P @ b
+            # find the transformation that maps points in fixed Y to moving x
+            # return x and Y centered at the origin,
+            # transformation matrix, and translation
+            x, Y, T, tx, ty = similarity_trans(x, Y)
+            # T, tx, ty = affine_trans(Y, x)
+
+            # Project Y into the model co-ordinate frame by inverting T
+            # y = transform_shape(T, Y)
+            y = transform_shape(Y, inv(T))
+
+            # Project y into the tangent plane to xbar (x_mean) by scaling
+            y_prime = y / (np.dot(y[:, 0], x_mean))
+
+            # Update model parameters to match to y_prime
+            b = np.transpose(P) @ (y_prime - x_mean)
+
+            # Apply constraints to the parameters of b to ensure plausible shapes
+            for i in range(0, len(largest_evals)):
+                if b[i] > 3 * sqrt(largest_evals[i]):
+                    b[i] = 3 * sqrt(largest_evals[i])
+                elif b[i] < - 3 * sqrt(largest_evals[i]):
+                    b[i] = - 3 * sqrt(largest_evals[i])
+
+            x_temp = x_mean + P @ b
+            # move new shape to the origin of the coordinate system
+            x_temp, _, _ = move_to_origin(x_temp)
+            x_mean_scaled_new = transform_shape(x_temp, T, (tx, ty))
+
+            update_line(hl, x_mean_scaled_new)
+            update_line(nl, transform_shape(Y, np.eye(2), (tx, ty)))
+
+            average_diff = np.linalg.norm(x_mean_scaled_new - x_mean_scaled) / sqrt(2 * no_points)
+
+            print("Iteration {},\nAverage diff {}".format(it, average_diff))
+
+            if average_diff < min_diff or it >= max_it:
+                break
+
+            it += 1
+            x_mean_scaled = x_mean_scaled_new
+
+        # scale up in order to go to the other level of the pyramid
+        if pyr_index < (no_levels - 1):
+            x_mean_scaled *= 2
+            pyr_normals_length *= 2
+    plt.show()
+
+
+def pca(shapes_norm):
     """
-    Apply affine transformation to a shape.
-    :param corr_pos: shape to be transformed.
-    :param R: Rotation and scaling matrix
-    :param tx: translation vector.
+    Performs PCA on the normalized shapes.
+    :param shapes_norm: array of coordinates of normalized shapes.
     :return:
     """
-    y = np.zeros_like(corr_pos)
-    t = np.array(t)
-    for j in range(0, no_points):
-        y[j, 0], y[j + no_points, 0] = (R @ np.array([corr_pos[j, 0], corr_pos[j + no_points, 0]])) + t
-    return y
+    # Mean and covariance
+    mean_shape = np.mean(shapes_norm, axis=1)
+    mean_shape = np.reshape(mean_shape,(len(mean_shape),1))
+    cov_shape = np.cov(shapes_norm)
 
-def move_to_origin(x):
-    """
+    # E-values E-vectors
+    evals, evecs = np.linalg.eig(cov_shape)
+    real_evals = np.real(evals)
+    real_evecs = np.real(evecs)
 
-    :param x:
-    :return: x, tx, ty:
+    # total variance of the data
+    v_t = np.sum(real_evals)
+    #print(v_t)
 
-    """
-    # Correct x so it is centered at (0,0)
-    tx = np.mean(x[:no_points, :])
-    ty = np.mean(x[no_points:, :])
-    x[:no_points, :] = (x[:no_points, :] - tx)
-    x[no_points:, :] = (x[no_points:, :] - ty)
-    return x, tx, ty
+    # the proportion of the total variation one wishes to explain
+    f_v = 0.98
 
-#Image gradient, we can try 
-sobelx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=5)
-sobely = cv2.Sobel(img,cv2.CV_32F, 0, 1, ksize=5)
-grad_mag = np.sqrt(sobelx**2 + sobely**2)
-# normalize
-grad_mag = (grad_mag - grad_mag.min()) / grad_mag.max()
+    # Choose e-values larger than f_v * v_t
+    cumu_evals = real_evals[:20]
+    cumu_evals = np.cumsum(cumu_evals)
+    eval_stop = v_t * f_v
+    i_largest_evals = np.argmax(cumu_evals >= eval_stop)
 
-# plt.imshow(grad_mag, cmap="gray")
-# plt.show()
+    largest_evals = real_evals[:i_largest_evals + 1]
+    largest_evecs = real_evecs[:, :i_largest_evals + 1]
 
-# Generate the model point positions using x = x_bar + P * b
-trans_init = (300, 300)
-x_mean, largest_evals, P = pca(shapes_norm)
-x_mean_scaled = transform_shape(x_mean, 1400 * np.eye(2), trans_init)
-# Initialise the shape parameters, b, to zero (the mean shape)
-b = np.zeros((len(largest_evals), 1))
-P = np.transpose(P)
-
-dr = draggable_hand(img, x_mean_scaled)
-trans_init = (trans_init[0] + dr.trans_x, trans_init[1] + dr.trans_y)
-print("Final translation")
-print(trans_init)
-
-# getting new transformed shape
-x_mean_scaled = np.zeros_like(x_mean_scaled)
-x_mean_scaled[:no_points] = dr.shape_x
-x_mean_scaled[no_points:] = dr.shape_y
-
-plt.imshow(img, cmap="gray")
-hl, = plt.plot([], [])
-
-for i in range (0,150):
-    # should be done with protocol 1 pg 9
-    # Norm Calculation
-    normals = np.zeros((no_points, dimens))
-
-    for i in range(0, no_points):
-        # the first and the last points vectors should
-        # be calculated using one neighbor
-        if i == 0:
-            ux = x_mean_scaled[i + 1] - x_mean_scaled[i]
-            uy = x_mean_scaled[i + 1 + no_points] - x_mean_scaled[i + no_points]
-        elif i == no_points - 1:
-            ux = x_mean_scaled[i] - x_mean_scaled[i - 1]
-            uy = x_mean_scaled[i + no_points] - x_mean_scaled[i + no_points - 1]
-        else:
-            # points that have two neighbors
-            ux = x_mean_scaled[i + 1] - x_mean_scaled[i - 1]
-            uy = x_mean_scaled[i + 1 + no_points] - x_mean_scaled[i - 1 + no_points]
-        # nx, ny for each point
-        normals[i, 0] = -uy / sqrt(ux * ux + uy * uy)
-        normals[i, 1] = ux / sqrt(ux * ux + uy * uy)
-
-    # PLOT normals
-    # display_normals(normals, x_mean_scaled, img, scale)
-
-    # finding correct positions on the model, Y
-    corr_pos = np.zeros(x_mean_scaled.shape)
-
-    for i in range(0, no_points):
-        # landmark point coordinates
-        px = x_mean_scaled[i]
-        py = x_mean_scaled[i + no_points]
-        nx, ny = normals[i, :]
-        max_x, max_y = grad_mag.shape
-        check_pixels = []
-        for t in range(-scale, +scale):
-            lx = px + t * nx
-            ly = py + t * ny
-            # check boundaries
-            if lx >= max_x:
-                lx = max_x -1
-            elif lx < 0:
-                lx = 0
-
-            if ly >= max_y:
-                ly = max_y - 1
-            elif ly < 0:
-                ly = 0
-
-            check_pixels.append((lx, ly))
-
-        check_pixels = np.array(check_pixels, dtype=int)
-
-        grad_values = grad_mag[check_pixels[:, 0], check_pixels[:, 1]]
-        mag_argmax = np.argmax(grad_values)
-        corr_pos[i] = check_pixels[mag_argmax, 0]
-        corr_pos[i + no_points] = check_pixels[mag_argmax, 1]
-
-    # plt.imshow(img, cmap="gray")
-    # plt.plot(corr_pos[:no_points], corr_pos[no_points:])
-    # plt.show()
-
-    # Find correct T
-    # Correct x so it is centered at (0,0)
-    x = x_mean + P @ b
-    x, _, _ = move_to_origin(x)
-
-    # tx, ty, scale, angle = find_pose_params(corr_pos, x)
-
-    corr_pos, tx, ty = move_to_origin(corr_pos)
-    a_t = float((np.transpose(x) @ corr_pos) / (np.transpose(x) @ x))
-    b_t = float((np.dot(x[:no_points, 0], corr_pos[no_points:, 0]) - np.dot(x[no_points:, 0],corr_pos[:no_points, 0])) / (np.transpose(x) @ x))
-    T = np.array([[a_t, -b_t], [b_t, a_t]])
-
-    #Project Y (corr_pos) into the model co-ordinate frame by inverting T
-    #y = transform_shape(T, corr_pos)
-    y = transform_shape(corr_pos, inv(T))
-
-
-    #Project y into the tangent plane to xbar (x_mean) by scaling
-    # y_prime = y / (np.dot(y, x_mean))
-    y_prime = y
-
-    #Update model parameters to match to y_prime
-    b = np.transpose(P) @ (y_prime - x_mean)
-
-    #Apply contraints to the parameters of b to ensure plausible shapes
-    for i in range(0,len(largest_evals)):
-        if b[i] > 3 * sqrt(largest_evals[i]):
-            b[i] = 3 * sqrt(largest_evals[i])
-        elif b[i] < - 3 * sqrt(largest_evals[i]):
-            b[i] = - 3 * sqrt(largest_evals[i])
-
-
-    x_mean_scaled = transform_shape(x_mean + P @ b, T, (tx, ty))
-    update_line(hl, x_mean_scaled)
-
-plt.show()
+    return mean_shape, largest_evals, largest_evecs

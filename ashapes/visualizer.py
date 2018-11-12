@@ -1,11 +1,9 @@
 import numpy as np
 from math import sqrt, asin, sin, cos
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import cv2
 
-no_points = 56
-no_shapes = 40
+from utils import no_points, no_shapes
+
 
 def display_normals(normals, mean, img, scale=15):
     """
@@ -56,6 +54,8 @@ class DraggableShape:
         self.shape_plot = shape_plot
         self.scale = 1
 
+        self.is_transforming = False
+
         self.update_shape_rect()
 
         w, h = img.shape
@@ -71,8 +71,12 @@ class DraggableShape:
             'button_release_event', self.on_release)
         self.cidmotion = self.shape_plot.figure.canvas.mpl_connect(
             'motion_notify_event', self.on_motion)
-        self.cidmotion = self.shape_plot.figure.canvas.mpl_connect(
+        self.scroll_motion = self.shape_plot.figure.canvas.mpl_connect(
             'scroll_event', self.on_scroll)
+        self.key_motion = self.shape_plot.figure.canvas.mpl_connect(
+            'key_press_event', self.on_key_press)
+        # self.key_motion = self.shape_plot.figure.canvas.mpl_connect(
+        #     'key_release_event', self.on_key_press)
 
     def on_press(self, event):
         """On button press we will see if the mouse is over us and store some data"""
@@ -81,33 +85,56 @@ class DraggableShape:
         # than we'll do transformation
         if ((self.x0 <= event.xdata <= self.x0 + self.width) and
             (self.y0 <= event.ydata <= self.y0 + self.height)):
-            print('event contains')
             self.press = self.x0, self.y0, event.xdata, event.ydata
         else:
-            print("Rotation expected.")
             self.rot_press = self.x0, self.y0, event.xdata, event.ydata
+
+    def on_key_press(self, event):
+        """On key press we will move graph in direction of the keys pressed."""
+        self.update_shape_rect()
+
+        if event.key == "up":
+            dx = 0
+            dy = -1
+        elif event.key == "down":
+            dx = 0
+            dy = 1
+        elif event.key == "right":
+            dx = 1
+            dy = 0
+        elif event.key == "left":
+            dx = -1
+            dy = 0
+
+        self.transform_shape(np.eye(2), (dx, dy))
 
     def on_motion(self, event):
         """On motion we will move the rect if the mouse is over us"""
         if self.press is None and self.rot_press is None: 
+            return
+
+        if self.is_transforming:
             return
     
         if ((self.x0 <= event.xdata <= self.x0 + self.width) and
             (self.y0 <= event.ydata <= self.y0 + self.height)):
             # translation
             if self.press is not None:
+                self.is_transforming = True
                 x0, y0, xpress, ypress = self.press
                 self.dx = event.xdata - xpress
                 self.dy = event.ydata - ypress
-                self.transform_shape(np.eye(2), (self.dx, self.dy))
+                # decrease movement 10 times to make less sensitive
+                self.transform_shape(np.eye(2), (10 * self.dx, 10 * self.dy))
         else:
             # rotation
             if self.rot_press is not None:
+                #self.is_transforming = True
                 x0, y0, x1, y1 = self.rot_press
                           
                 sign = 1 if (event.ydata - y1) >= 0 else -1
-                # 3 degrees
-                unit_angle = sign * 0.052
+                # 0.3 degrees
+                unit_angle = sign * 0.0052
                 sin_a = sin(unit_angle)
                 cos_a = cos(unit_angle)
                 R = np.array(((cos_a, -sin_a), (sin_a, cos_a)))
@@ -115,23 +142,37 @@ class DraggableShape:
 
     def on_release(self, event):
         """On release we reset the press data"""
-        self.trans_x = self.shape_x.min() - self.x0
-        self.trans_y = self.shape_y.min() - self.y0
+        # self.trans_x = self.shape_x.min() - self.x0
+        # self.trans_y = self.shape_y.min() - self.y0
 
         self.press = None
         self.rot_press = None
+        self.is_transforming = False
     
     def on_scroll(self, event):
         """Scaling on scrolling."""
-        # 5% percent increase/descrease
-        self.scale += event.step * 0.05
-        self.transform_shape(self.scale * np.eye(2))
+        # 1% percent increase/decrease
+        if self.is_transforming:
+            return
+
+        if self.scale <= 0.5 and event.step < 0:
+            return
+        if self.scale >= 1.6 and event.step > 0:
+            return
+
+        scale_new = self.scale + event.step * 0.01
+        k = scale_new / self.scale
+        self.scale = scale_new
+        self.transform_shape(k * np.eye(2))
     
     def disconnect(self):
         """Disconnect all the stored connection ids."""
         self.shape_plot.figure.canvas.mpl_disconnect(self.cidpress)
         self.shape_plot.figure.canvas.mpl_disconnect(self.cidrelease)
         self.shape_plot.figure.canvas.mpl_disconnect(self.cidmotion)
+        self.shape_plot.figure.canvas.mpl_disconnect(self.key_motion)
+        self.shape_plot.figure.canvas.mpl_disconnect(self.scroll_motion)
+
     
     def update_shape_rect(self):
         """Update information about the shape."""
@@ -148,10 +189,15 @@ class DraggableShape:
         """
         x = np.zeros_like(self.shape_x)
         y = np.zeros_like(self.shape_y)
+        mean_x = self.shape_x.mean()
+        mean_y = self.shape_y.mean()
+
         t = np.array(t).reshape((2, 1))
-        for i, xy in enumerate(zip(self.shape_x, self.shape_y)):
+        for i, xy in enumerate(zip(self.shape_x - mean_x, self.shape_y - mean_y)):
             x[i], y[i] = (R @ np.array(xy)) + t
-        
+
+        x += mean_x
+        y += mean_y
         self.shape_plot.set_xdata(x)
         self.shape_plot.set_ydata(y)
         self.shape_plot.figure.canvas.draw()
@@ -173,6 +219,7 @@ def draggable_hand(img, shape):
     """
 
     fig = plt.figure()
+    plt.title("Please use arrow keys to move the hand up and down,\nright and left, scroll to zoom,\ndrag outside shape to rotate")
     ax = fig.add_subplot(111)
     ax.imshow(img, cmap = "gray")
     shape_plot,  = ax.plot(shape[:no_points, :], shape[no_points:, :])

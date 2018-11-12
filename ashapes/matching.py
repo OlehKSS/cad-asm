@@ -38,7 +38,7 @@ def match_average_shape(path_shapes_norm, path_test_img):
     # Initialise b
     b = np.zeros((len(largest_evals), 1))
     # Change P indices for matrix multiplication
-    P = np.transpose(P)
+    #P = np.transpose(P)
 
     plt.subplot(121)
     plt.imshow(grad_mag, cmap="gray")
@@ -133,7 +133,7 @@ def match_average_shape_pyr(path_shapes_norm, path_test_img):
     # Initialise b
     b = np.zeros((len(largest_evals), 1))
     # Change P indices for matrix multiplication
-    P = np.transpose(P)
+    # P = np.transpose(P)
 
     # minimum number of levels is 1
     no_levels = 3
@@ -214,12 +214,12 @@ def match_average_shape_pyr(path_shapes_norm, path_test_img):
 
             it += 1
             x_mean_scaled = x_mean_scaled_new
-        plt.show()
 
         # scale up in order to go to the other level of the pyramid
         if pyr_index < (no_levels - 1):
             x_mean_scaled *= 2
             pyr_normals_length *= 2
+    plt.show()
 
 
 def pca(shapes_norm):
@@ -252,6 +252,6 @@ def pca(shapes_norm):
     i_largest_evals = np.argmax(cumu_evals >= eval_stop)
 
     largest_evals = real_evals[:i_largest_evals + 1]
-    largest_evecs = real_evecs[:i_largest_evals + 1, :]
+    largest_evecs = real_evecs[:, :i_largest_evals + 1]
 
     return mean_shape, largest_evals, largest_evecs

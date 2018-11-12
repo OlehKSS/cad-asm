@@ -9,7 +9,7 @@ from matching import match_average_shape, match_average_shape_pyr
 path_shapes = "./data/hand/shapes/shapes.txt"
 path_shapes_norm = "./data/hand/shapes/shapes_norm.txt"
 path_images = "./data/hand/images"
-test_img_name = 26
+test_img_name = 4
 
 test_img_path = os.path.join(path_images, str(test_img_name).zfill(4) + ".jpg")
 

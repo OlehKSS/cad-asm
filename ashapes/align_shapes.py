@@ -4,10 +4,10 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils import no_points, no_shapes, get_images
+from .utils import no_points, no_shapes, get_images
 
 
-def align(path_shapes, path_images, path_shapes_norm, test_img_name=48):
+def align(path_shapes, path_images, path_shapes_norm=None, test_img_name=48):
     """
     Align all the shapes and normalize their coordinates excluding test image.
     :param path_shapes: a path to the file with shapes coordinates.
@@ -33,8 +33,8 @@ def align(path_shapes, path_images, path_shapes_norm, test_img_name=48):
     shapes = np.delete(shapes, test_img_indx, 1)
 
     # Plotting shapes (unaligned)
-    plt.figure()
-    plt.plot(shapes[:no_points, :], shapes[no_points:, :])
+    # plt.figure()
+    # plt.plot(shapes[:no_points, :], shapes[no_points:, :])
 
     # Normalize shapes to have origin at COM
     x_mean = np.mean(shapes[:no_points, :], axis=0).reshape([1, no_shapes])
@@ -45,8 +45,8 @@ def align(path_shapes, path_images, path_shapes_norm, test_img_name=48):
     shapes_norm[no_points:, :] = (shapes[no_points:, :] - y_mean) / norm
 
     # Plotting shapes (COM)
-    plt.figure()
-    plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
+    # plt.figure()
+    # plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
 
     # Find mean shape for starting point iterations
     mean_shape = np.mean(shapes_norm, axis=1).reshape([2 * no_points])
@@ -96,8 +96,11 @@ def align(path_shapes, path_images, path_shapes_norm, test_img_name=48):
         break
 
     # Plotting shapes (aligned)
-    plt.figure()
-    plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
-    plt.show()
+    # plt.figure()
+    # plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
+    # plt.show()
 
-    np.savetxt(path_shapes_norm, shapes_norm)
+    if path_shapes_norm is not None:
+        np.savetxt(path_shapes_norm, shapes_norm)
+    
+    return shapes_norm

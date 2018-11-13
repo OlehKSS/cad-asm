@@ -2,7 +2,7 @@ import numpy as np
 from math import sqrt, asin, sin, cos
 import matplotlib.pyplot as plt
 
-from utils import no_points, no_shapes
+from .utils import no_points, no_shapes
 
 
 def display_normals(normals, mean, img, scale=15):

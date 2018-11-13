@@ -4,13 +4,22 @@ import cv2
 import matplotlib.pyplot as plt
 from math import sqrt
 
-from visualizer import display_normals, update_line, draggable_hand
-from utils import transform_shape, move_to_origin, similarity_trans, affine_trans, no_points, no_shapes, \
+from .visualizer import display_normals, update_line, draggable_hand
+from .utils import transform_shape, move_to_origin, similarity_trans, affine_trans, no_points, no_shapes, \
     find_current_points, find_current_points_r
 
-def match_average_shape(path_shapes_norm, path_test_img):
-    # previously normalized shapes
-    shapes_norm = np.loadtxt(path_shapes_norm, np.float32)
+def match_average_shape(shapes_norm, path_test_img, plot_results=True):
+    """
+    Finds a shape on the test image by matching average shape.
+
+    Parameters:
+        shapes_norm (numpy.ndarray): normalized shapes coordinates.
+        path_test_img (str): a path to the test image.
+        plot_results (bool): if True plots calcualtion results, otherwise not.
+
+    Returns:
+        x_mean_scaled (numpy.ndarray): found shape.
+    """
     img = cv2.imread(path_test_img, 0)
     img = cv2.GaussianBlur(img, (5, 5), 0)
 
@@ -37,18 +46,18 @@ def match_average_shape(path_shapes_norm, path_test_img):
 
     # Initialise b
     b = np.zeros((len(largest_evals), 1))
-    # Change P indices for matrix multiplication
-    #P = np.transpose(P)
 
-    plt.subplot(121)
-    plt.imshow(grad_mag, cmap="gray")
-    hl, = plt.plot([], [], 'o-')
-    plt.title("Current shape")
+    if plot_results:
 
-    plt.subplot(122)
-    plt.imshow(grad_mag, cmap="gray")
-    nl, = plt.plot([], [], 'o-')
-    plt.title("Landmark points")
+        plt.subplot(121)
+        plt.imshow(grad_mag, cmap="gray")
+        hl, = plt.plot([], [], 'o-')
+        plt.title("Current shape")
+
+        plt.subplot(122)
+        plt.imshow(grad_mag, cmap="gray")
+        nl, = plt.plot([], [], 'o-')
+        plt.title("Landmark points")
 
     it = 0
     min_diff = 0.5
@@ -64,10 +73,8 @@ def match_average_shape(path_shapes_norm, path_test_img):
         # return x and Y centered at the origin,
         # transformation matrix, and translation
         x, Y, T, tx, ty = similarity_trans(x, Y)
-        # T, tx, ty = affine_trans(Y, x)
 
         # Project Y into the model co-ordinate frame by inverting T
-        # y = transform_shape(T, Y)
         y = transform_shape(Y, inv(T))
 
         # Project y into the tangent plane to xbar (x_mean) by scaling
@@ -88,8 +95,9 @@ def match_average_shape(path_shapes_norm, path_test_img):
         x_temp, _, _ = move_to_origin(x_temp)
         x_mean_scaled_new = transform_shape(x_temp, T, (tx, ty))
 
-        update_line(hl, x_mean_scaled_new)
-        update_line(nl, transform_shape(Y, np.eye(2), (tx, ty)))
+        if plot_results:
+            update_line(hl, x_mean_scaled_new)
+            update_line(nl, transform_shape(Y, np.eye(2), (tx, ty)))
 
         average_diff = np.linalg.norm(x_mean_scaled_new - x_mean_scaled) / sqrt(2 * no_points)
 
@@ -100,12 +108,26 @@ def match_average_shape(path_shapes_norm, path_test_img):
 
         it += 1
         x_mean_scaled = x_mean_scaled_new
-    plt.show()
+
+    if plot_results:
+        plt.show()
+
+    return x_mean_scaled
 
 
-def match_average_shape_pyr(path_shapes_norm, path_test_img):
-    # previously normalized shapes
-    shapes_norm = np.loadtxt(path_shapes_norm, np.float32)
+def match_average_shape_pyr(shapes_norm, path_test_img, plot_results=True):
+    """
+    Finds a shape on the test image by matching average shape.
+    It uses Gaussian pyramid to improve results of matching.
+
+    Parameters:
+        shapes_norm (numpy.ndarray): normalized shapes coordinates.
+        path_test_img (str): a path to the test image.
+        plot_results (bool): if True plots calcualtion results, otherwise not.
+    
+    Returns:
+        x_mean_scaled (numpy.ndarray): found shape.
+    """
     img = cv2.imread(path_test_img, 0)
     img = cv2.GaussianBlur(img, (5, 5), 0)
 
@@ -132,8 +154,6 @@ def match_average_shape_pyr(path_shapes_norm, path_test_img):
 
     # Initialise b
     b = np.zeros((len(largest_evals), 1))
-    # Change P indices for matrix multiplication
-    # P = np.transpose(P)
 
     # minimum number of levels is 1
     no_levels = 3
@@ -154,15 +174,16 @@ def match_average_shape_pyr(path_shapes_norm, path_test_img):
         # normalize
         grad_mag = (grad_mag - grad_mag.min()) / grad_mag.max()
 
-        plt.subplot(121)
-        plt.imshow(grad_mag, cmap="gray")
-        hl, = plt.plot([], [], 'o-')
-        plt.title("Current shape")
+        if plot_results:
+            plt.subplot(121)
+            plt.imshow(grad_mag, cmap="gray")
+            hl, = plt.plot([], [], 'o-')
+            plt.title("Current shape")
 
-        plt.subplot(122)
-        plt.imshow(grad_mag, cmap="gray")
-        nl, = plt.plot([], [], 'o-')
-        plt.title("Landmark points")
+            plt.subplot(122)
+            plt.imshow(grad_mag, cmap="gray")
+            nl, = plt.plot([], [], 'o-')
+            plt.title("Landmark points")
 
         it = 0
         min_diff = 0.5
@@ -178,10 +199,8 @@ def match_average_shape_pyr(path_shapes_norm, path_test_img):
             # return x and Y centered at the origin,
             # transformation matrix, and translation
             x, Y, T, tx, ty = similarity_trans(x, Y)
-            # T, tx, ty = affine_trans(Y, x)
 
             # Project Y into the model co-ordinate frame by inverting T
-            # y = transform_shape(T, Y)
             y = transform_shape(Y, inv(T))
 
             # Project y into the tangent plane to xbar (x_mean) by scaling
@@ -202,8 +221,9 @@ def match_average_shape_pyr(path_shapes_norm, path_test_img):
             x_temp, _, _ = move_to_origin(x_temp)
             x_mean_scaled_new = transform_shape(x_temp, T, (tx, ty))
 
-            update_line(hl, x_mean_scaled_new)
-            update_line(nl, transform_shape(Y, np.eye(2), (tx, ty)))
+            if plot_results:
+                update_line(hl, x_mean_scaled_new)
+                update_line(nl, transform_shape(Y, np.eye(2), (tx, ty)))
 
             average_diff = np.linalg.norm(x_mean_scaled_new - x_mean_scaled) / sqrt(2 * no_points)
 
@@ -219,7 +239,11 @@ def match_average_shape_pyr(path_shapes_norm, path_test_img):
         if pyr_index < (no_levels - 1):
             x_mean_scaled *= 2
             pyr_normals_length *= 2
-    plt.show()
+
+    if plot_results:
+        plt.show()
+
+    return x_mean_scaled
 
 
 def pca(shapes_norm):

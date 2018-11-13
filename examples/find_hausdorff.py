@@ -43,8 +43,11 @@ with open(out_file, 'a+') as file:
         
         file.write(f"{str(test_img_name).zfill(4)},{h_dist}\n")
 
+        print(f"{str(test_img_name).zfill(4)},{h_dist}\n")
+
         img = cv2.imread(test_img_path, 0)
         plt.imshow(img, cmap="gray")
         plt.plot(res_shape_xy[:, 0], res_shape_xy[:, 1])
         plt.plot(test_img_shape_xy[:, 0], test_img_shape_xy[:, 1])
+        plt.title(str(test_img_name).zfill(4))
         plt.show()

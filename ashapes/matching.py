@@ -60,7 +60,7 @@ def match_average_shape(shapes_norm, path_test_img, plot_results=True):
         plt.title("Landmark points")
 
     it = 0
-    min_diff = 0.5
+    min_diff = 0.3
     max_it = 100
 
     while True:
@@ -186,7 +186,7 @@ def match_average_shape_pyr(shapes_norm, path_test_img, plot_results=True):
             plt.title("Landmark points")
 
         it = 0
-        min_diff = 0.5
+        min_diff = 0.3
         max_it = 100
 
         while True:

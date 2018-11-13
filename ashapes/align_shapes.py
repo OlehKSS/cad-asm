@@ -14,7 +14,7 @@ def align(path_shapes, path_images, path_shapes_norm=None, test_img_name=48):
     :param path_images: a path to the folder that stores original images.
     :param path_shapes_norm: a full path to a file where normalized shapes coordinates should be stored.
     :param test_img_name: a number that is a name of the test image.
-    :return: None
+    :return:
     """
     # min difference, after which we stop iterations
     min_diff = 0.025
@@ -103,4 +103,4 @@ def align(path_shapes, path_images, path_shapes_norm=None, test_img_name=48):
     if path_shapes_norm is not None:
         np.savetxt(path_shapes_norm, shapes_norm)
     
-    return shapes_norm
+    return shapes_norm, test_img_shape

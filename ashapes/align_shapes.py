@@ -7,12 +7,11 @@ import matplotlib.pyplot as plt
 from .utils import no_points, no_shapes, get_images
 
 
-def align(path_shapes, path_images, path_shapes_norm=None, test_img_name=48):
+def align(path_shapes, path_images, test_img_name=48):
     """
     Align all the shapes and normalize their coordinates excluding test image.
     :param path_shapes: a path to the file with shapes coordinates.
     :param path_images: a path to the folder that stores original images.
-    :param path_shapes_norm: a full path to a file where normalized shapes coordinates should be stored.
     :param test_img_name: a number that is a name of the test image.
     :return:
     """
@@ -99,8 +98,5 @@ def align(path_shapes, path_images, path_shapes_norm=None, test_img_name=48):
     # plt.figure()
     # plt.plot(shapes_norm[:no_points, :], shapes_norm[no_points:, :])
     # plt.show()
-
-    if path_shapes_norm is not None:
-        np.savetxt(path_shapes_norm, shapes_norm)
     
     return shapes_norm, test_img_shape

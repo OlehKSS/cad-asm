@@ -10,10 +10,13 @@ from ashapes.utils import no_points, get_images
 
 
 # Finds average shape, builds active shapes model
-# and compares it with the original shape using hausdorf distance
-# Path to hand data
+# and compares it with the original shape using hausdorff distance
+
+# imgs[:20] (line 29) specifies which images (or all) you would like to perform Hausdorff
+# calculations for. Here is it from 0-20.
+
+# Set paths to shapes.txt file and images folder
 path_shapes = "./data/hand/shapes/shapes.txt"
-path_shapes_norm = "./data/hand/shapes/shapes_norm.txt"
 path_images = "./data/hand/images"
 out_file = "./data/hausdorff.csv"
 
@@ -26,7 +29,7 @@ with open(out_file, 'a+') as file:
     for test_img_name in imgs[:20]:
         test_img_path = os.path.join(path_images, str(test_img_name).zfill(4) + ".jpg")
 
-        shapes_norm, test_img_shape = align(path_shapes, path_images, path_shapes_norm, test_img_name)
+        shapes_norm, test_img_shape = align(path_shapes, path_images, test_img_name)
         res_shape = match_average_shape(shapes_norm, test_img_path, plot_results=False)
 
         dim_xy = (no_points, 2)
